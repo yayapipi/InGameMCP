@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "unity-game-mcp": {
+      "command": "python",
+      "args": [
+        "Assets/SimpleMCP/PythonServer/simple_mcp_bridge.py"
+      ],
+      "env": {
+        "UNITY_HOST": "localhost",
+        "UNITY_PORT": "8765"
+      },
+      "enabled": true
+    }
+  }
+}

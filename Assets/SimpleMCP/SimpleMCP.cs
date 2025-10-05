@@ -22,6 +22,7 @@ public class SimpleMCP : MonoBehaviour
 
     private void Start()
     {
+        Application.runInBackground = true;
         // 如果沒有設置玩家，自動尋找
         if (playerTransform == null)
         {
@@ -52,7 +53,7 @@ public class SimpleMCP : MonoBehaviour
             serverThread.Start();
 
             Debug.Log($"[SimpleMCP] 伺服器已啟動在端口 {port}");
-            Debug.Log($"[SimpleMCP] 使用 Python 腳本連接: python simple_client.py");
+            Debug.Log($"[SimpleMCP] 使用 Python 腳本連接: python Assets/SimpleMCP/PythonServer/simple_mcp.py");
         }
         catch (Exception e)
         {
@@ -102,6 +103,10 @@ public class SimpleMCP : MonoBehaviour
                     if (stream.DataAvailable)
                     {
                         bytesRead = stream.Read(buffer, 0, buffer.Length);
+                        if (bytesRead <= 0)
+                        {
+                            break; // 連線關閉
+                        }
                         if (bytesRead > 0)
                         {
                             string message = DecodeFrame(buffer, bytesRead);
@@ -133,9 +138,10 @@ public class SimpleMCP : MonoBehaviour
         var lines = request.Split('\n');
         foreach (var line in lines)
         {
-            if (line.StartsWith("Sec-WebSocket-Key:"))
+            var headerLine = line.Trim('\r');
+            if (headerLine.StartsWith("Sec-WebSocket-Key:", StringComparison.OrdinalIgnoreCase))
             {
-                key = line.Substring(19).Trim();
+                key = headerLine.Substring(19).Trim();
                 break;
             }
         }
@@ -156,14 +162,28 @@ public class SimpleMCP : MonoBehaviour
     {
         if (length < 2) return null;
 
+        byte firstByte = buffer[0];
+        bool fin = (firstByte & 0x80) != 0;
+        byte opcode = (byte)(firstByte & 0x0F);
+        // 僅處理文本幀，忽略其他幀（如 ping/pong/binary/close/續傳）
+        if (opcode != 0x1) return null;
+
         bool isMasked = (buffer[1] & 0x80) != 0;
+        // 來自客戶端的幀應為遮罩，否則忽略
+        if (!isMasked) return null;
         int payloadLength = buffer[1] & 0x7F;
         int offset = 2;
 
         if (payloadLength == 126)
         {
+            if (length < 4) return null;
             payloadLength = (buffer[2] << 8) | buffer[3];
             offset = 4;
+        }
+        else if (payloadLength == 127)
+        {
+            // 不支援超大訊息，避免超範圍與阻塞
+            return null;
         }
 
         byte[] mask = new byte[4];
@@ -173,6 +193,7 @@ public class SimpleMCP : MonoBehaviour
             offset += 4;
         }
 
+        if (offset + payloadLength > length) return null;
         byte[] payload = new byte[payloadLength];
         for (int i = 0; i < payloadLength; i++)
         {
@@ -345,6 +366,13 @@ public class SimpleMCP : MonoBehaviour
         listener?.Stop();
         serverThread?.Join(1000);
         Debug.Log("[SimpleMCP] 伺服器已停止");
+    }
+
+    private void OnApplicationQuit()
+    {
+        isRunning = false;
+        listener?.Stop();
+        serverThread?.Join(1000);
     }
 
     [Serializable]
