@@ -53,7 +53,7 @@ public class SimpleMCP : MonoBehaviour
             serverThread.Start();
 
             Debug.Log($"[SimpleMCP] 伺服器已啟動在端口 {port}");
-            Debug.Log($"[SimpleMCP] 使用 Python 腳本連接: python Assets/SimpleMCP/PythonServer/simple_mcp.py");
+            Debug.Log("[SimpleMCP] 建議透過 MCP Bridge 連接（Cursor 將依 .cursor/mcp.json 自動啟動 Python Bridge）");
         }
         catch (Exception e)
         {
